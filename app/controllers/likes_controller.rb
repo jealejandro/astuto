@@ -1,15 +1,10 @@
 class LikesController < ApplicationController
-  before_action :authenticate_user!, only: [:create, :destroy]
+  before_action :set_anonymous_id, only: [:create, :destroy]
   before_action :check_tenant_subscription, only: [:create, :destroy]
 
   def index
     likes = Like
-      .select(
-        :id,
-        :full_name,
-        :email
-      )
-      .left_outer_joins(:user)
+      .select(:id, :anonymous_id)
       .where(post_id: params[:post_id])
 
     render json: likes
@@ -21,8 +16,7 @@ class LikesController < ApplicationController
     if like.save
       render json: {
         id: like.id,
-        full_name: current_user.full_name,
-        email: current_user.email,
+        anonymous_id: like.anonymous_id,
       }, status: :created
     else
       render json: {
@@ -33,17 +27,15 @@ class LikesController < ApplicationController
 
   def destroy
     like = Like.find_by(like_params)
-    id = like.id
+    id = like&.id
     
-    return if like.nil?
-
-    if like.destroy
+    if like&.destroy
       render json: {
         id: id,
       }, status: :accepted
     else
       render json: {
-        error: like.errors.full_messages
+        error: like&.errors&.full_messages || ["Like not found"]
       }, status: :unprocessable_entity
     end
   end
@@ -53,7 +45,11 @@ class LikesController < ApplicationController
     def like_params
       {
         post_id: params[:post_id],
-        user_id: current_user.id,
+        anonymous_id: @anonymous_id,
       }
+    end
+
+    def set_anonymous_id
+      @anonymous_id = session[:anonymous_id] ||= SecureRandom.uuid
     end
 end
